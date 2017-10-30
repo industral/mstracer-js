@@ -1,0 +1,18 @@
+{
+  "name": "mstracer-js",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://alex@bitbucket.int.office.scirott.com/scm/scirott/mstracer-js.git"
+  },
+  "author": "",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "uuid": "^3.1.0"
+  }
+}
