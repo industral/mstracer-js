@@ -29,8 +29,6 @@ const HTTP_DIRECTION_OUT = 'out';
 const HTTP_TYPE_RESPONSE = 'response';
 const HTTP_TYPE_REQUEST = 'request';
 
-console.log('init');
-
 class MSTracer {
   constructor({service, node}) {
     this.service = service;
@@ -38,35 +36,33 @@ class MSTracer {
 
     this.LEVEL = {
       INFO: 'info',
-      ERROR: 'error'
+      ERROR: 'error',
+      CRITICAL: 'ciritical'
     }
   }
 
   intercept(server) {
-    // this.server = server;
-
-    server.on('stream', (stream, headers, flags) => {
+    server.on('stream', (stream, headers) => {
       //TODO: log only with X-TRACE header requests
       if (!headers[TRACE_ID]) {
         const traceId = uuid();
         const pathTraceId = uuid();
         const pairTraceId = uuid();
         const ptpTraceId = uuid();
-        // const pTraceId = uuid();
+        const pTraceId = uuid();
 
         stream._traceHeaders = {
           [TRACE_ID]: traceId,
           [PATH_TRACE_ID]: pathTraceId,
           [PAIR_TRACE_ID]: pairTraceId,
           [PTP_TRACE_ID]: ptpTraceId,
-          // [POINT_TRACE_ID]: pTraceId
+          [POINT_TRACE_ID]: pTraceId
         };
 
-        console.log(444, headers[HTTP2_HEADER_CONTENT_TYPE]);
+        // console.log(444, headers[HTTP2_HEADER_CONTENT_TYPE]);
 
         this.log({
           record: {
-            pTraceId: uuid(),
             type: TYPE_HTTP,
             httpDirection: HTTP_DIRECTION_OUT,
             httpType: HTTP_TYPE_REQUEST,
@@ -79,13 +75,15 @@ class MSTracer {
             traceId,
             pathTraceId,
             pairTraceId,
-            ptpTraceId
+            ptpTraceId,
+            pTraceId
           }
         });
 
+        stream._traceHeaders[POINT_TRACE_ID] = uuid();
+
         this.log({
           record: {
-            pTraceId: uuid(),
             type: TYPE_HTTP,
             httpDirection: HTTP_DIRECTION_IN,
             httpType: HTTP_TYPE_REQUEST,
@@ -97,27 +95,28 @@ class MSTracer {
             traceId,
             pathTraceId,
             pairTraceId,
-            ptpTraceId
+            ptpTraceId,
+            pTraceId: stream._traceHeaders[POINT_TRACE_ID]
           }
         });
       }
 
-      console.log('request', headers[HTTP2_HEADER_PATH]);
+      // console.log('request', headers[HTTP2_HEADER_PATH]);
 
       stream.on('data', (a, b, c) => {
-        console.log('data:' + a)
+        // console.log('data:' + a)
       });
 
       stream.on('end', (a, b, c) => {
-        console.log('end', a, b, c)
+        // console.log('end', a, b, c)
       });
 
       /*
         End of write (response).
        */
       stream.on('finish', (a, b, c) => {
-        console.log('finish', headers);
-        console.log(stream.constructor)
+        // console.log('finish', headers);
+        // console.log(stream.constructor)
 
 
 
@@ -128,7 +127,7 @@ class MSTracer {
       });
 
       stream.on('streamClosed', (a, b, c) => {
-        console.log('streamClosed', a, b, c)
+        // console.log('streamClosed', a, b, c)
       });
 
       const old = stream.respond;
@@ -143,7 +142,8 @@ class MSTracer {
 
       const oldWrite = stream._write;
       stream._write = (...args) => {
-        console.log('r', args);
+        //TODO: ensure that write could be only once
+        // console.log('r', args);
 
         let record = {
           pTraceId: uuid(),
@@ -181,7 +181,7 @@ class MSTracer {
 
       const oldEnd = stream.end;
       stream.end = (...args) => {
-        console.log('eeeeee!!!!!!!!!!!!!!', args);
+        // console.log('eeeeee!!!!!!!!!!!!!!', args);
 
         return oldEnd.apply(stream, args);
       }
@@ -189,7 +189,11 @@ class MSTracer {
   }
 
   log({record, stream}) {
-    const mstracerSession = http2.connect(config.mstracerAPI);
+    if (!record) {
+      console.error(`Record should be passed`);
+      return;
+    }
+    // console.log("RECORD:", record);
     // mstracerSession.on('connect', (error) => {
 
     record.service = record.service || this.service;
@@ -198,19 +202,32 @@ class MSTracer {
       record.reference = record.reference.stack.split('\n')[1];
     }
 
-    if (stream) {
-      if (!record.type) {
-        record.type = TYPE_CODE;
+    // if (stream) {
+    // type: code
 
-        const traceInfo = this.getTraceInfoFromStream(stream);
-
-        record = {...record, ...traceInfo};
+    record.type = record.type || TYPE_CODE;
+    if (record.type === TYPE_CODE) {
+      if (!stream) {
+        console.error(`Sending logs should have a stream passed`);
+        console.info('Record:', record);
+        return;
       }
+
+      const traceInfo = this.getTraceInfoFromStream(stream);
+      // console.log(traceInfo);
+
+      record = {...record, ...traceInfo};
+    }
+    // }
+
+    if (record.type === TYPE_CODE) {
+      // console.log(record);
     }
 
     record.timestamp = +new Date();
     record.node = this.node;
 
+    const mstracerSession = http2.connect(config.mstracerAPI);
     const request = mstracerSession.request({
       [HTTP2_HEADER_METHOD]: 'PUT',
       [HTTP2_HEADER_PATH]: '/log'
@@ -219,34 +236,58 @@ class MSTracer {
 
 
     request.on('response', (headers) => {
-      console.log(headers[HTTP2_HEADER_STATUS]);
+      // console.log(headers[HTTP2_HEADER_STATUS]);
     });
 
     request.on('data', (chunk) => {
-      console.log('_d', chunk);
+      // console.log('_d', chunk);
     });
     request.on('end', () => {
-      console.log('_e');
+      // console.log('_e');
     });
     request.on('error', (error) => {
-      console.log('_error', error);
+      // console.log('_error', error);
     });
 
     request.on('headers', (headers, flags) => {
-      console.log('_headers', headers);
+      // console.log('_headers', headers);
     });
 
     request.on('push', (headers, flags) => {
-      console.log('_push', headers);
+      // console.log('_push', headers);
     });
 
     request.end(JSON.stringify(record));
     // });
 
-    console.log('sessionType', mstracerSession.type, http2.constants.NGHTTP2_SESSION_CLIENT);
+    // console.log('sessionType', mstracerSession.type, http2.constants.NGHTTP2_SESSION_CLIENT);
 
 
     // });
+  }
+
+  info(args) {
+    if (args.record) {
+      args.record.level = this.LEVEL.INFO;
+    }
+
+    this.log(args);
+  }
+
+  error(args) {
+    if (args.record) {
+      args.record.level = this.LEVEL.ERROR;
+    }
+
+    this.log(args);
+  }
+
+  critical(args) {
+    if (args.record) {
+      args.record.level = this.LEVEL.CRITICAL;
+    }
+
+    this.log(args);
   }
 
   getTraceInfoFromStream(stream) {
@@ -257,7 +298,7 @@ class MSTracer {
       pathTraceId: headers[PATH_TRACE_ID],
       pairTraceId: headers[PAIR_TRACE_ID],
       ptpTraceId: headers[PTP_TRACE_ID],
-      // pTraceId: headers[POINT_TRACE_ID]
+      pTraceId: headers[POINT_TRACE_ID]
     }
   }
 
