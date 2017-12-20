@@ -1,16 +1,16 @@
 {
   "name": "mstracer-js",
   "version": "1.0.0",
-  "description": "",
+  "description": "Client library for MSTracer",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
-    "url": "http://alex@bitbucket.int.office.scirott.com/scm/scirott/mstracer-js.git"
+    "url": "https://github.com/industral/mstracer-js.git"
   },
-  "author": "",
+  "author": "Alex Ivasyuv",
   "license": "UNLICENSED",
   "dependencies": {
     "uuid": "^3.1.0"
